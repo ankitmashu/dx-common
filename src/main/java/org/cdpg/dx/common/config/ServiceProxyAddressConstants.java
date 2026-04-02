@@ -14,4 +14,7 @@ public class ServiceProxyAddressConstants {
   public static final String EMAIL_SERVICE_ADDRESS = "org.cdpg.dx.email.service";
   public static final String REDIS_SERVICE_ADDRESS = "org.cdpg.dx.database.redis";
   public static final String SCHEDULER_SERVICE_ADDRESS = "org.cdpg.dx.scheduler.service";
+  public static final String MINIO_SERVICE_ADDRESS = "org.cdpg.dx.cloudstorage.minio";
+  public static final String S3_SERVICE_ADDRESS = "org.cdpg.dx.cloudstorage.s3";
+
 }

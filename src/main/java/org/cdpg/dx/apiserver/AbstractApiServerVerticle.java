@@ -74,20 +74,28 @@ import org.cdpg.dx.common.util.BlockingExecutionUtil;
  */
 public abstract class AbstractApiServerVerticle extends AbstractVerticle {
 
-  private static final Logger LOGGER = LogManager.getLogger(AbstractApiServerVerticle.class);
-
   protected static final String APPLICATION_JSON = "application/json";
   protected static final String CONTENT_TYPE = "Content-Type";
   protected static final String ROUTE_STATIC_SPEC = "/apis/spec";
   protected static final String ROUTE_DOC = "/apis";
-
+  private static final Logger LOGGER = LogManager.getLogger(AbstractApiServerVerticle.class);
+  protected URNGenerator urnGenerator;
   private HttpServer server;
   private Router router;
-  protected URNGenerator urnGenerator;
 
   // =====================================================================
   // Abstract methods — subclasses MUST provide
   // =====================================================================
+
+  /** Utility for building standardized error responses. */
+  public static String errorResponse(HttpStatusCode code, URNGenerator urnGenerator) {
+    String urn = urnGenerator.generateUrn(code.getPath());
+    return new JsonObject()
+        .put("type", urn)
+        .put("title", code.getDescription())
+        .put("detail", code.getDescription())
+        .toString();
+  }
 
   /** Path to the OpenAPI YAML spec file (e.g., "docs/openapi.yaml"). */
   protected abstract String getOpenApiSpecPath(JsonObject config);
@@ -98,13 +106,13 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
   /** Default URN prefix (e.g., "urn:dx:controlPanel:"). */
   protected abstract String getDefaultUrnPrefix();
 
-  /** Create and return all API controllers for this server. */
-  protected abstract List<ApiController> createControllers(
-      io.vertx.core.Vertx vertx, JsonObject config, URNGenerator urnGenerator);
-
   // =====================================================================
   // Optional overrides — sensible defaults provided
   // =====================================================================
+
+  /** Create and return all API controllers for this server. */
+  protected abstract List<ApiController> createControllers(
+      io.vertx.core.Vertx vertx, JsonObject config, URNGenerator urnGenerator);
 
   /** Config key for the base URL placeholder replacement. Default: "baseUrl". */
   protected String getBaseUrlConfigKey() {
@@ -124,7 +132,10 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
     return null;
   }
 
-  /** Body size limit for requests. Default: {@link BodyHandler#DEFAULT_BODY_LIMIT}. Use -1 for unlimited. */
+  /**
+   * Body size limit for requests. Default: {@link BodyHandler#DEFAULT_BODY_LIMIT}. Use -1 for
+   * unlimited.
+   */
   protected long getBodyLimit() {
     return BodyHandler.DEFAULT_BODY_LIMIT;
   }
@@ -142,17 +153,17 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
     return null;
   }
 
+  // =====================================================================
+  // Lifecycle — NOT overridable
+  // =====================================================================
+
   /**
-   * Hook for registering additional routes on the router (e.g., health, documentation). Called after
-   * all OpenAPI routes are registered.
+   * Hook for registering additional routes on the router (e.g., health, documentation). Called
+   * after all OpenAPI routes are registered.
    */
   protected void configureAdditionalRoutes(Router router, JsonObject config) {
     // Default: no-op. Subclasses override to add custom routes.
   }
-
-  // =====================================================================
-  // Lifecycle — NOT overridable
-  // =====================================================================
 
   @Override
   public void start() throws Exception {
@@ -201,8 +212,7 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
                         vertx, config().getJsonObject("issuers"), getJwksInternalProvider());
 
                 // Auth handlers
-                MultiIssuerJwtAuthHandler authHandler =
-                    new MultiIssuerJwtAuthHandler(jwksResolver);
+                MultiIssuerJwtAuthHandler authHandler = new MultiIssuerJwtAuthHandler(jwksResolver);
                 OptionalMultiIssuerJwtAuthHandler optionalAuthHandler =
                     new OptionalMultiIssuerJwtAuthHandler(jwksResolver);
 
@@ -210,13 +220,21 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
                 long timeout = config().getLong("timeout", getDefaultTimeoutMs());
                 routerBuilder.rootHandler(TimeoutHandler.create(timeout, 408));
 
-                BodyHandler bodyHandler =
-                    BodyHandler.create().setHandleFileUploads(true);
-                long bodyLimit = getBodyLimit();
-                if (bodyLimit != BodyHandler.DEFAULT_BODY_LIMIT) {
-                  bodyHandler.setBodyLimit(bodyLimit);
-                }
-                routerBuilder.rootHandler(bodyHandler);
+                routerBuilder.rootHandler(
+                    ctx -> {
+                      String requestPath = ctx.request().path();
+                      if (!requestPath.contains("on-seek")) {
+                        BodyHandler bodyHandler = BodyHandler.create().setHandleFileUploads(true);
+                        long bodyLimit = getBodyLimit();
+                        if (bodyLimit != BodyHandler.DEFAULT_BODY_LIMIT) {
+                          bodyHandler.setBodyLimit(bodyLimit);
+                        }
+                        bodyHandler.handle(ctx);
+                      } else {
+                        ctx.request().pause();
+                        ctx.next();
+                      }
+                    });
 
                 LOGGER.debug("Registering controllers...");
                 RouterBuilderOptions factoryOptions =
@@ -242,10 +260,7 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
                 router
                     .get(ROUTE_STATIC_SPEC)
                     .produces(APPLICATION_JSON)
-                    .handler(
-                        ctx ->
-                            ctx.response()
-                                .sendFile(tempFile.toAbsolutePath().toString()));
+                    .handler(ctx -> ctx.response().sendFile(tempFile.toAbsolutePath().toString()));
 
                 router
                     .get(ROUTE_DOC)
@@ -278,9 +293,7 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
                           if (http.succeeded()) {
                             printDeployedEndpoints(router);
                             LOGGER.info(
-                                "{} deployed on port: {}",
-                                this.getClass().getSimpleName(),
-                                port);
+                                "{} deployed on port: {}", this.getClass().getSimpleName(), port);
                           } else {
                             LOGGER.error(
                                 "HTTP server failed to start: {}",
@@ -301,16 +314,16 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
                     failure));
   }
 
+  // =====================================================================
+  // Shared private methods — identical across all DX API servers
+  // =====================================================================
+
   @Override
   public void stop() {
     if (server != null) {
       server.close();
     }
   }
-
-  // =====================================================================
-  // Shared private methods — identical across all DX API servers
-  // =====================================================================
 
   private void configureJackson() {
     ObjectMapper mapper = DatabindCodec.mapper();
@@ -379,7 +392,10 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
             }
             return;
           }
-          response.setStatusCode(401).putHeader(CONTENT_TYPE, APPLICATION_JSON).end("not implemented");
+          response
+              .setStatusCode(401)
+              .putHeader(CONTENT_TYPE, APPLICATION_JSON)
+              .end("not implemented");
         });
   }
 
@@ -414,15 +430,5 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
         LOGGER.info("Deployed endpoint [{}] {}", route.methods(), route.getPath());
       }
     }
-  }
-
-  /** Utility for building standardized error responses. */
-  public static String errorResponse(HttpStatusCode code, URNGenerator urnGenerator) {
-    String urn = urnGenerator.generateUrn(code.getPath());
-    return new JsonObject()
-        .put("type", urn)
-        .put("title", code.getDescription())
-        .put("detail", code.getDescription())
-        .toString();
   }
 }
