@@ -84,6 +84,98 @@ public class AppIdVerificationClient {
     return promise.future();
   }
 
+  /**
+   * Sends VerifyAppId with a per-call Bearer token for service authentication.
+   * The token is obtained from {@link KeycloakTokenExchangeProvider} and injected via
+   * {@link BearerTokenCallCredentials}.
+   */
+  public Future<VerifyAppIdResponse> verify(String appId, String appSecret, String exchangedToken) {
+    Promise<VerifyAppIdResponse> promise = Promise.promise();
+    asyncStub
+        .withCallCredentials(new BearerTokenCallCredentials(exchangedToken))
+        .verifyAppId(
+            VerifyAppIdRequest.newBuilder().setAppId(appId).setAppSecret(appSecret).build(),
+            new StreamObserver<>() {
+              @Override
+              public void onNext(VerifyAppIdResponse response) {
+                promise.complete(response);
+              }
+
+              @Override
+              public void onError(Throwable t) {
+                LOGGER.error("gRPC VerifyAppId (auth) failed appId={}: {}", appId, t.getMessage());
+                promise.fail(t);
+              }
+
+              @Override
+              public void onCompleted() {}
+            });
+    return promise.future();
+  }
+
+  /** Sends CheckItemAccess with a per-call Bearer token for service authentication. */
+  public Future<CheckItemAccessResponse> checkItemAccess(
+      String userId, String entityId, String did, String exchangedToken) {
+    Promise<CheckItemAccessResponse> promise = Promise.promise();
+    asyncStub
+        .withCallCredentials(new BearerTokenCallCredentials(exchangedToken))
+        .checkItemAccess(
+            CheckItemAccessRequest.newBuilder()
+                .setUserId(userId)
+                .setEntityId(entityId)
+                .setDid(did != null ? did : "")
+                .build(),
+            new StreamObserver<>() {
+              @Override
+              public void onNext(CheckItemAccessResponse response) {
+                promise.complete(response);
+              }
+
+              @Override
+              public void onError(Throwable t) {
+                LOGGER.error(
+                    "gRPC CheckItemAccess (auth) failed userId={} entityId={}: {}",
+                    userId, entityId, t.getMessage());
+                promise.fail(t);
+              }
+
+              @Override
+              public void onCompleted() {}
+            });
+    return promise.future();
+  }
+
+  /** Sends ResolveDelegation with a per-call Bearer token for service authentication. */
+  public Future<ResolveDelegationResponse> resolveDelegation(
+      String delegatorSub, String delegateeSub, String exchangedToken) {
+    Promise<ResolveDelegationResponse> promise = Promise.promise();
+    asyncStub
+        .withCallCredentials(new BearerTokenCallCredentials(exchangedToken))
+        .resolveDelegation(
+            ResolveDelegationRequest.newBuilder()
+                .setDelegatorSub(delegatorSub)
+                .setDelegateeSub(delegateeSub)
+                .build(),
+            new StreamObserver<>() {
+              @Override
+              public void onNext(ResolveDelegationResponse response) {
+                promise.complete(response);
+              }
+
+              @Override
+              public void onError(Throwable t) {
+                LOGGER.error(
+                    "gRPC ResolveDelegation (auth) failed delegatorSub={}: {}",
+                    delegatorSub, t.getMessage());
+                promise.fail(t);
+              }
+
+              @Override
+              public void onCompleted() {}
+            });
+    return promise.future();
+  }
+
   /** Initiates a graceful shutdown of the underlying channel. Call during application teardown. */
   public void shutdown() throws InterruptedException {
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
