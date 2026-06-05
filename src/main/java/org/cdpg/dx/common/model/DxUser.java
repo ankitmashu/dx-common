@@ -31,34 +31,45 @@ public record DxUser(
     JsonArray scopes,
     String delegateeId,
     String appId) {
-  public JsonObject toJson() {
-    String isoCreatedAt = createdAt != null ? createdAt.toString() : null;
+  public static DxUser fromJsonObject(JsonObject json) {
+    if (json == null) {
+      return null;
+    }
 
-    return new JsonObject()
-        .put("roles", roles != null ? new JsonArray(roles) : new JsonArray())
-        .put("organisationId", organisationId)
-        .put("organisationName", organisationName)
-        .put("sub", sub != null ? sub.toString() : null)
-        .put("emailVerified", emailVerified)
-        .put("kycVerified", kycVerified)
-        .put("name", name)
-        .put("preferredUsername", preferredUsername)
-        .put("givenName", givenName)
-        .put("familyName", familyName)
-        .put("email", email)
-        .put("pending_roles", pendingRoles != null ? new JsonArray(pendingRoles) : new JsonArray())
-        .put("organisation", organisation != null ? organisation : new JsonObject())
-        .put("createdAt", isoCreatedAt)
-        .put("kycInformation", kycData)
-        .put("twitter_account", twitter_account)
-        .put("linkedin_account", linkedin_account)
-        .put("github_account", github_account)
-        .put("account_enabled", account_enabled)
-        .put("did", did)
-        .put("aud", aud)
-        .put("delegation_scope", scopes)
-        .put("delegateeId", delegateeId)
-        .put("appId", appId);
+    List<String> roles = json.getJsonArray("roles", new JsonArray()).getList();
+    UUID sub = null;
+    String subStr = json.getString("sub");
+    if (subStr != null && !subStr.isEmpty()) {
+      sub = UUID.fromString(subStr);
+    }
+
+    List<String> pendingRoles = json.getJsonArray("pending_roles", new JsonArray()).getList();
+
+    return new DxUser(
+        roles,
+        json.getString("organisationId"),
+        json.getString("organisationName"),
+        sub,
+        json.getBoolean("emailVerified", false),
+        json.getBoolean("kycVerified", false),
+        json.getString("name"),
+        json.getString("preferredUsername"),
+        json.getString("givenName"),
+        json.getString("familyName"),
+        json.getString("email"),
+        pendingRoles,
+        json.getJsonObject("organisation", new JsonObject()),
+        null,
+        json.getJsonObject("kycInformation", new JsonObject()),
+        json.getString("twitter_account", ""),
+        json.getString("linkedin_account", ""),
+        json.getString("github_account", ""),
+        json.getBoolean("account_enabled"),
+        json.getString("did"),
+        json.getString("aud"),
+        json.getJsonArray("delegation_scope", new JsonArray()),
+        json.getString("delegateeId"),
+        json.getString("appId"));
   }
 
   public static DxUser withPendingRoles(
@@ -88,5 +99,35 @@ public record DxUser(
         user.scopes(),
         user.delegateeId(),
         user.appId());
+  }
+
+  public JsonObject toJson() {
+    String isoCreatedAt = createdAt != null ? createdAt.toString() : null;
+
+    return new JsonObject()
+        .put("roles", roles != null ? new JsonArray(roles) : new JsonArray())
+        .put("organisationId", organisationId)
+        .put("organisationName", organisationName)
+        .put("sub", sub != null ? sub.toString() : null)
+        .put("emailVerified", emailVerified)
+        .put("kycVerified", kycVerified)
+        .put("name", name)
+        .put("preferredUsername", preferredUsername)
+        .put("givenName", givenName)
+        .put("familyName", familyName)
+        .put("email", email)
+        .put("pending_roles", pendingRoles != null ? new JsonArray(pendingRoles) : new JsonArray())
+        .put("organisation", organisation != null ? organisation : new JsonObject())
+        .put("createdAt", isoCreatedAt)
+        .put("kycInformation", kycData)
+        .put("twitter_account", twitter_account)
+        .put("linkedin_account", linkedin_account)
+        .put("github_account", github_account)
+        .put("account_enabled", account_enabled)
+        .put("did", did)
+        .put("aud", aud)
+        .put("delegation_scope", scopes)
+        .put("delegateeId", delegateeId)
+        .put("appId", appId);
   }
 }

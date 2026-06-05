@@ -5,7 +5,9 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.web.RoutingContext;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
@@ -43,8 +45,42 @@ public class RoutingContextHelper {
   private static final String DID = "did";
   private static final String POLICY_ID = "policyId";
   private static final String API_ENDPOINT = "apiEndpoint";
+  private static final String METADATA_KEY = "dx.metadata";
 
   private RoutingContextHelper() {}
+
+  // --- Generic Metadata (key-value store on RoutingContext) ---
+
+  /**
+   * Store an arbitrary metadata value on the routing context under a named key. Useful for passing
+   * domain objects (e.g. Asset) between handlers without coupling to specific typed accessors.
+   */
+  public static void setMetadata(RoutingContext ctx, String key, Object value) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata = ctx.get(METADATA_KEY);
+    if (metadata == null) {
+      metadata = new HashMap<>();
+      ctx.put(METADATA_KEY, metadata);
+    }
+    metadata.put(key, value);
+  }
+
+  /**
+   * Retrieve a metadata value previously stored via {@link #setMetadata}.
+   *
+   * @param <T> the expected type of the value
+   * @param ctx the routing context
+   * @param key the metadata key
+   * @return the value, or null if not present
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T getMetadata(RoutingContext ctx, String key) {
+    Map<String, Object> metadata = ctx.get(METADATA_KEY);
+    if (metadata == null) {
+      return null;
+    }
+    return (T) metadata.get(key);
+  }
 
   // --- Auditing ---
 
@@ -238,9 +274,9 @@ public class RoutingContextHelper {
       throw new DxBadRequestException(AuthConstants.INVALID_SUB_UUID);
     }
 
-    JsonArray scopes     = principal.getJsonArray(KeycloakConstants.CLAIM_SCOPES, new JsonArray());
-    String delegateeId   = principal.getString(KeycloakConstants.CLAIM_DELEGATEE_SUB, null);
-    String appId         = principal.getString(KeycloakConstants.CLAIM_APP_ID, null);
+    JsonArray scopes = principal.getJsonArray(KeycloakConstants.CLAIM_SCOPES, new JsonArray());
+    String delegateeId = principal.getString(KeycloakConstants.CLAIM_DELEGATEE_SUB, null);
+    String appId = principal.getString(KeycloakConstants.CLAIM_APP_ID, null);
 
     return new DxUser(
         roles,

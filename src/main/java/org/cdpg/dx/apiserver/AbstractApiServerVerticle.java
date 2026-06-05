@@ -88,6 +88,14 @@ public abstract class AbstractApiServerVerticle extends AbstractVerticle {
   private Router router;
   protected JwksResolver jwksResolver;
 
+  /**
+   * Returns the router instance for subclasses that need to register
+   * additional routes outside of {@link #configureAdditionalRoutes}.
+   */
+  protected Router getRouter() {
+    return router;
+  }
+
   // =====================================================================
   // Abstract methods — subclasses MUST provide
   // =====================================================================
