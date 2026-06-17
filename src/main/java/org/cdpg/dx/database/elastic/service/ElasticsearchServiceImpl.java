@@ -22,6 +22,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient;
 import co.elastic.clients.elasticsearch._types.Refresh;
 import co.elastic.clients.elasticsearch._types.Result;
 import co.elastic.clients.elasticsearch._types.Script;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
@@ -116,6 +117,13 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
       LOGGER.debug("Sort options: {}", queryModel.toSortOptions());
       requestBuilder.sort(queryModel.toSortOptions());
     }
+    // Cursor (search_after) pagination: resume immediately after the previous page's last hit,
+    // bypassing the from + size window limit. Mutually used with sort; from is ignored by ES.
+    List<FieldValue> searchAfter = queryModel.toSearchAfterFieldValues();
+    if (searchAfter != null) {
+      LOGGER.debug("search_after: {}", searchAfter);
+      requestBuilder.searchAfter(searchAfter);
+    }
     SearchRequest request = requestBuilder.build();
     LOGGER.debug("Request: {}", request);
     asyncClient
@@ -161,7 +169,9 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
                         break;
                     }
 
-                    esResponses.add(new ElasticsearchResponse(id, result));
+                    // Preserve the hit's sort values so callers can build a search_after cursor.
+                    esResponses.add(
+                        new ElasticsearchResponse(id, result, toSortValues(hit.sort())));
                   }
 
                   totalHitsCount =
@@ -181,6 +191,28 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
             });
 
     return promise.future();
+  }
+
+  /**
+   * Flattens a hit's {@code sort} values into plain Java objects so they can be carried on {@link
+   * ElasticsearchResponse} and re-issued as a {@code search_after} cursor.
+   */
+  private static List<Object> toSortValues(List<FieldValue> sort) {
+    if (sort == null || sort.isEmpty()) {
+      return null;
+    }
+    List<Object> values = new ArrayList<>(sort.size());
+    for (FieldValue fv : sort) {
+      switch (fv._kind()) {
+        case Long -> values.add(fv.longValue());
+        case Double -> values.add(fv.doubleValue());
+        case Boolean -> values.add(fv.booleanValue());
+        case String -> values.add(fv.stringValue());
+        case Null -> values.add(null);
+        default -> values.add(fv._get() != null ? fv._get().toString() : null);
+      }
+    }
+    return values;
   }
 
   private int parseSize(String options, QueryModel model) {

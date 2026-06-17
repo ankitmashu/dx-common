@@ -93,6 +93,11 @@ public class QueryModel {
   private List<String> excludeFields;
   private Map<String, String> sortFields; // Key: Field name, Value: Sort order ("asc" or "desc")
 
+  // For search_after (cursor) pagination: the sort values of the last hit from the previous page.
+  // Stored as List<Object> so the generated @DataObject converter round-trips it over the EventBus
+  // (mirrors ElasticsearchResponse.sortValues).
+  private List<Object> searchAfter;
+
   // Field for storing the script source (the actual script)
   private String scriptSource;
 
@@ -767,6 +772,46 @@ public class QueryModel {
               .toList());
     }
     return sortOptions.isEmpty() ? null : sortOptions;
+  }
+
+  public List<Object> getSearchAfter() {
+    return searchAfter;
+  }
+
+  public void setSearchAfter(List<Object> searchAfter) {
+    this.searchAfter = searchAfter;
+  }
+
+  /**
+   * Converts the stored {@code searchAfter} cursor values into Elasticsearch {@link FieldValue}s.
+   *
+   * <p>The values originate from a previous hit's {@code sort} array (see {@link
+   * ElasticsearchResponse#getSortValues()}) and are passed back as {@code search_after} to resume
+   * pagination immediately after that document — bypassing the {@code from + size} window limit.
+   *
+   * @return list of {@link FieldValue}s aligned with the sort, or {@code null} if no cursor is set.
+   */
+  public List<FieldValue> toSearchAfterFieldValues() {
+    if (searchAfter == null || searchAfter.isEmpty()) {
+      return null;
+    }
+    return searchAfter.stream().map(QueryModel::toFieldValue).collect(Collectors.toList());
+  }
+
+  private static FieldValue toFieldValue(Object value) {
+    if (value == null) {
+      return FieldValue.NULL;
+    }
+    if (value instanceof Boolean b) {
+      return FieldValue.of(b);
+    }
+    if (value instanceof Integer || value instanceof Long) {
+      return FieldValue.of(((Number) value).longValue());
+    }
+    if (value instanceof Number n) {
+      return FieldValue.of(n.doubleValue());
+    }
+    return FieldValue.of(value.toString());
   }
 
   /**
