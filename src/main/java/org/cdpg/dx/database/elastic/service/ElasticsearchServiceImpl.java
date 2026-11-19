@@ -82,13 +82,16 @@ import org.elasticsearch.client.RestClient;
 public class ElasticsearchServiceImpl implements ElasticsearchService {
   private static final Logger LOGGER = LogManager.getLogger(ElasticsearchServiceImpl.class);
 
-  static ElasticClient client;
-  private static ElasticsearchAsyncClient asyncClient;
+  // Per-instance: ElasticsearchVerticle may be deployed more than once in the same JVM (e.g. local
+  // and central catalogue clusters). Static fields here would let the last instance overwrite the
+  // client for every service address.
+  private final ElasticClient client;
+  private final ElasticsearchAsyncClient asyncClient;
   private static volatile ObjectMapper nullPreservingMapper;
 
   public ElasticsearchServiceImpl(ElasticClient client) {
-    ElasticsearchServiceImpl.client = client;
-    asyncClient = client.getClient();
+    this.client = client;
+    this.asyncClient = client.getClient();
   }
 
   /**
