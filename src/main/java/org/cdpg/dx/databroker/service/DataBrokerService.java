@@ -5,6 +5,7 @@ import io.vertx.codegen.annotations.ProxyGen;
 import io.vertx.codegen.annotations.VertxGen;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
+import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import java.util.List;
@@ -20,6 +21,16 @@ public interface DataBrokerService {
   @GenIgnore
   static DataBrokerService createProxy(Vertx vertx, String address) {
     return new DataBrokerServiceVertxEBProxy(vertx, address);
+  }
+
+  /**
+   * Creates an event-bus proxy with a custom send timeout. Use this when a call (e.g. adapter
+   * RPC via {@link #executeAdapterQueryRPC}) can take longer than the Vert.x default of 30s.
+   */
+  @GenIgnore
+  static DataBrokerService createProxy(Vertx vertx, String address, long sendTimeoutMs) {
+    DeliveryOptions options = new DeliveryOptions().setSendTimeout(sendTimeoutMs);
+    return new DataBrokerServiceVertxEBProxy(vertx, address, options);
   }
 
   Future<RegisterQueueModel> registerQueue(String userId, String queueName, Vhosts vhosts);
